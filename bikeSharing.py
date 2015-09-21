@@ -3,13 +3,16 @@ import pandas as pd
 import numpy as np
 import matplotlib.pyplot as plt
 import collections
-import scipy.stats as stats
+import statsmodels.api as st
 
 #Loading data
-train = pd.read_csv('train.csv', parse_dates=[0], index_col=0)
-test = pd.read_csv('test.csv', parse_dates=[0], index_col=0)
-
+train = pd.read_csv('train.csv', parse_dates=[0])
+test = pd.read_csv('test.csv', parse_dates=[0])
 print(train.head())
+
+#Evaluation Function
+for col in ['count', 'registered', 'casual']:
+    train['log-' + col] = train[col].apply(lambda x: np.log1p(x))
 
 #Drawing plots for train['workingday'] and train['season']
 fig, axes = plt.subplots(nrows=2)
@@ -46,3 +49,36 @@ plt.show()
 # [s.set_yticks(()) for s in sm.reshape(-1)]
 #
 # plt.show()
+
+temp_train = pd.DatetimeIndex(train['datetime'])
+train['year'] = temp_train.year
+train['month'] = temp_train.month
+train['hour'] = temp_train.hour
+train['weekday'] = temp_train.weekday
+
+temp_test = pd.DatetimeIndex(test['datetime'])
+test['year'] = temp_test.year
+test['month'] = temp_test.month
+test['hour'] = temp_test.hour
+test['weekday'] = temp_test.weekday
+
+#Features vector
+features = ['season', 'holiday', 'workingday', 'weather', 'temp', 'atemp', 'humidity', 'windspeed', 'year', 'month', 'weekday', 'hour']
+
+#Model building on the new training set
+newtraining = train[:int(0.95*len(train))]
+validation = train[int(0.95*len(train)):]
+
+X = st.add_constant(newtraining[features])
+model = st.OLS(newtraining['log-count'], X)
+f = model.fit()
+print(f.summary())
+
+#Apply the model to test set
+testnew = test[features]
+testnew.insert(0, 'const', 1)
+ypredtest = f.predict(testnew)
+result = np.round(np.expm1(ypredtest))
+
+df = pd.DataFrame({'datetime': test['datetime'], 'count': result})
+df.to_csv('linearRegression_output.csv', index=False, columns=['datetime', 'count'])
